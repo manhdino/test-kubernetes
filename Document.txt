@@ -187,4 +187,77 @@ kube-node-lease:
 
 kubectl get pod --namespace kube-system
 kubectl describe pod <tên-pod> --namespace kube-system
+kubectl create ns testing
+kubectl create ns production
+kubectl create ns staging
+kubectl apply -f hello-cube.yml
+kubectl get pods
+kubectl get pod -n testing
+kubectl delete pod hello-kube-testing -n testing
+kubectl delete ns testing
 
++ Các Hạn Chế Khi Chạy Pod Trực Tiếp
+ + Khả Năng Mở Rộng: Khi chạy Pod trực tiếp, bạn phải quản lý và theo dõi từng Pod một cách thủ công. Điều này làm giảm khả năng mở rộng và linh hoạt của hệ thống.
+ + Khả Năng Tự Phục Hồi: Nếu một Pod bị lỗi hoặc bị chết, Kubernetes không tự động khởi động lại Pod đó. Điều này đòi hỏi sự can thiệp thủ công hoặc viết các script phức tạp để tự phục hồi.
+ + Quản Lý Số Lượng Pod: Quản lý số lượng Pod mong muốn một cách thủ công không hiệu quả và dễ mắc lỗi. Điều này đặc biệt khó khăn khi số lượng Pod cần mở rộng hoặc thu hẹp theo tải công việc.
+ + Khả Năng Kiểm Soát Tình Trạng: Không có cơ chế tự động để đảm bảo rằng số lượng Pod luôn đúng với yêu cầu. Việc này có thể dẫn đến tình trạng quá tải hoặc thiếu hụt tài nguyên.
+
+--> Giải pháp: ReplicationControllers and other controller:
+Như chúng ta đã biết pod là thành phần cơ bản nhất để deploy application, nhưng trong thực tế ta sẽ không chạy pod trực tiếp như ở trên,
+vì nó sẽ gặp nhiều hạn chế, mà chúng ta sẽ tạo những resource khác như ReplicationControllers hoặc ReplicaSets, và nó sẽ tự động tạo và quản lý pod
+
++ ReplicationControllers(RC) là gì?
+  + ReplicationControllers là một resource mà sẽ tạo và quản lý pod, và chắc chắn là số lượng pod nó quản lý không thay đổi và kept running.
+  + ReplicationControllers sẽ tạo số lượng pod bằng với số ta chỉ định ở thuộc tính replicas và quản lý pod thông qua labels của pod
+
++ Tại sao ta nên dùng ReplicationControllers để chạy pod?
+  + Chúng ta đã biết pod nó sẽ giám sát container và tự động restart lại container khi nó fail
+  + Vậy trong trường hợp toàn bộ worker node(bọc ngoài Pod) của chúng ta fail thì sẽ thế nào? 
+    --> Pod nó sẽ không thể chạy nữa, và application của chúng ta sẽ downtime với người dùng
+
++ Nếu chúng ta chạy cluster với hơn 1 worker node, RC sẽ giúp chúng ta giải quyết vấn đề này.
++ Vì RC sẽ chắc chắn rằng số lượng Pod mà nó tạo ra không thay đổi
++ Ví dụ khi ta tạo một thằng RC với số lượng replicas = 1, RC sẽ tạo 1 Pod và giám sát nó,
+khi một thằng worker node die, nếu Pod của thằng RC quản lý có nằm trong worker node đó, 
+thì lúc này thằng RC sẽ phát hiện ra là số lượng Pod của nó bằng 0, và nó sẽ tạo ra thằng Pod ở một worker node khác để đạt lại được số lượng 1
++ Luồng: Start --> Find Pods matching with Label Selector --> Compare Matched with Pod Count --> Too Few: Create additional Pod
+                                                                |                                        |
+                                                                | --> Too many: Delete Pods ------------ Start
+
++ Sử dụng RC để chạy Pod sẽ giúp ứng dụng của chúng ta luôn luôn availability nhất có thể. 
++ Ngoài ra ta có thể tăng performance của ứng dụng bằng cách chỉ định số lượng replicas trong RC để RC tạo ra nhiều pod chạy cùng một version của ứng dụng.
++ Ví dụ ta có một webservice, nếu ta chỉ deploy một pod để chạy ứng dụng, thì ta chỉ có 1 container để xử lý request của user,
+nhưng nếu ta dùng RC và chỉ định replicas = 3, ta sẽ có 3 pod chạy 3 container của ứng dụng, và request của user sẽ được gửi tới 1 trong 3 pod này,
+giúp quá trình xử lý của chúng ta tăng gấp 3 lần
+
+Tại Sao Cần Nhiều Pod?
+Tăng Tính Sẵn Sàng (Availability):
+  + Khi chỉ có một Pod, nếu Pod đó gặp sự cố (chết, lỗi, hoặc bị ngừng hoạt động), toàn bộ dịch vụ của bạn sẽ ngừng hoạt động. 
+  + Sử dụng RC hoặc ReplicaSet với nhiều Pod giúp đảm bảo rằng luôn có sẵn một số lượng Pod nhất định để xử lý yêu cầu.
+Cải Thiện Hiệu Suất (Performance):
+  + Với nhiều Pod, bạn có thể phân tán tải giữa các Pod, giúp tăng khả năng xử lý đồng thời và giảm độ trễ. 
+  + Điều này đặc biệt quan trọng đối với các ứng dụng web hoặc các dịch vụ cần xử lý nhiều yêu cầu cùng lúc.
+
++ Cấu trúc của một file config RC sẽ gồm 3 phần chính như sau:
+  + label selector: sẽ chỉ định pod nào sẽ được RC giám sát
+  + replica count: số lượng pod sẽ được tạo
+  + pod template: config của pod sẽ được tạo
+kubectl apply -f hello-rc.yml
+kubectl get rc  # Nếu số lượng ở cột READY bằng với số lượng DESIRED thì chúng ta đã chạy RC thành công
+kubectl get pod # tên của pod được tạo ra bởi RC sẽ theo kiểu <replicationcontroller name>-<random>
+kubectl delete pod hello-rc-c6l8k
+kubectl get pod # Auto tạo 1 Pod mới
+
+Thay đổi template của pod
+Bạn có thể thay đổi template của pod và cập nhật lại RC, nhưng nó sẽ không apply cho những thằng pod hiện tại, 
+muốn pod của bạn cập nhật template mới, bạn phải xóa hết pod để RC tạo ra pod mới, hoặc xóa RC và tạo lại
+Khi  xóa RC thì những thằng pod nó quản lý cũng sẽ bị xóa theo
+
+kubectl delete rc hello-rc
+
+ReplicaSets(RS):
+ + Đây là một resource tương tự như RC, nhưng nó là một phiên bản mới hơn của RC và sẽ được sử dụng để thay thế RC. 
+ + Chúng ta sẽ dùng ReplicaSets (RS) để deploy pod thay vì dùng RC
+ + RS và RC sẽ hoạt động tương tự nhau. Nhưng RS linh hoạt hơn ở phần label selector, trong khi label selector 
+ thằng RC chỉ có thể chọn pod mà hoàn toàn giống với label nó chỉ định, thì thằng RS sẽ cho phép dùng một số expressions hoặc matching để chọn pod nó quản lý.
+ 
