@@ -15,8 +15,8 @@ Kubernetes:
    + Service được xác định dựa trên label, đại diện cho một entry point để truy cập vào ứng dụng.
    + Mỗi service có địa chỉ IP và port không đổi. 
    + Client có thể kết nối đến các IP và port của service, sau đó sẽ được điều hướng đến các pod để xử lý.
-   +  Quan trọng hơn hết là life cycle của service và pod không liên quan quan (kết nối) với nhau nên khi một pod bị crash (hoặc chết) thì service và IP của nó vẫn tồn tại.
-   +  Chúng ta có thể định nghĩa external service hoặc internal service tùy vào mục đích sử dụng. 
+   + Quan trọng hơn hết là life cycle của service và pod không liên quan quan (kết nối) với nhau nên khi một pod bị crash (hoặc chết) thì service và IP của nó vẫn tồn tại.
+   + Chúng ta có thể định nghĩa external service hoặc internal service tùy vào mục đích sử dụng. 
    + Khi browser request đến ứng dụng, lúc này ta sẽ sử dụng IP để kết nối (external service) nhưng url với những sản phẩm production sẽ có domain name 
     lúc này ta có tiếp một khái niệm là ingress.
 + Ingress
@@ -130,7 +130,7 @@ Kubernetes Architecture
     chắc chắn ứng dụng trong container đã chạy thì mới gửi request tới container đó, cung cấp một số lifecycle để ta có thể thêm hành động vào Pod khi Pod chạy hoặc shutdown,...
    + Kubernetes sẽ quản lý Pod thay vì quản lý container trực tiếp
 
-
+docker build . -t 080196/hello-kube
 kubectl apply -f hello-kube.yml
 kubectl get pod
 kubectl describe pod <tên-pod>
@@ -212,7 +212,7 @@ vì nó sẽ gặp nhiều hạn chế, mà chúng ta sẽ tạo những resourc
 
 + Tại sao ta nên dùng ReplicationControllers để chạy pod?
   + Chúng ta đã biết pod nó sẽ giám sát container và tự động restart lại container khi nó fail
-  + Vậy trong trường hợp toàn bộ worker node(bọc ngoài Pod) của chúng ta fail thì sẽ thế nào? 
+  + Vậy trong trường hợp  worker node(bọc ngoài Pod) của chúng ta fail thì sẽ thế nào? 
     --> Pod nó sẽ không thể chạy nữa, và application của chúng ta sẽ downtime với người dùng
 
 + Nếu chúng ta chạy cluster với hơn 1 worker node, RC sẽ giúp chúng ta giải quyết vấn đề này.
@@ -266,3 +266,76 @@ ReplicaSets(RS):
  kubectl apply -f hello-rs.yml
  kubectl get rs
  kubectl delete rs hello-rs
+
+
+ Sử dụng DaemonSets để chạy chính xác một pod trên một worker node
+ Đây là một resource khác của kube, giống như RS, nó cũng sẽ giám xác và quản lý pod theo lables.
+ Nhưng thằng RS thì pod có thể deploy ở bất cứ node nào, và trong một node có thể chạy mấy pod cũng được.
+ Còn thằng DaemonSets này sẽ deploy tới mỗi thằng node một pod duy nhất, và chắc chắn có bao nhiêu node sẽ có mấy nhiêu pod, nó sẽ không có thuộc tính replicas
+ Ứng dụng của thằng DaemonSets này sẽ được dùng trong việc logging và monitoring.
+ Lúc này thì chúng ta sẽ chỉ muốn có một pod monitoring ở mỗi node. 
+
+ kubectl label nodes <your-node-name> disk=ssd: đánh label vào trong một thằng woker node bằng cách sử dụng câu lệnh
+
+ + Services: expose traffic cho Pod
+
+
+Kubernetes Services là gì?
+  + Là một resouce sẽ tạo ra một single, constant point của một nhóm Pod phía sau nó.
+  + Mỗi service sẽ có một địa chỉ IP và port không đổi, trừ khi ta xóa nó đi và tạo lại. 
+  + Client sẽ mở connection tới service, và connection đó sẽ được dẫn tới một trong những Pod ở phía sau.
+  
+Vậy service giúp ta những vấn đề gì? Mỗi thằng Pod nó cũng có địa chỉ IP riêng của nó, 
+sao ta không gọi thẳng nó luôn mà thông qua service chi cho mất công?
+
+  + Vì địa chỉ IP của pod được thay đổi mỗi khi được khởi tạo lại nên giả sử container db của ta bị lỗi khiến pod chứa 2 container db và app phải tiến hành khởi tạo lại 
+   để thay thế cái cũ thì lúc này 2 pod sẽ bị mất kết nối.
+    -->  Chính vì vậy ta sẽ có tiếp một khái niệm mới là service.
+   + Service được xác định dựa trên label, đại diện cho một entry point để truy cập vào ứng dụng.
+   + Mỗi service có địa chỉ IP và port không đổi. 
+   + Client có thể kết nối đến các IP và port của service, sau đó sẽ được điều hướng đến các pod để xử lý.
+   + Quan trọng hơn hết là life cycle của service và pod không liên quan quan (kết nối) với nhau nên khi một pod bị crash (hoặc chết) thì service và IP của nó vẫn tồn tại.
+   + Chúng ta có thể định nghĩa external service hoặc internal service tùy vào mục đích sử dụng. 
+   + Khi browser request đến ứng dụng, lúc này ta sẽ sử dụng IP để kết nối (external service) nhưng url với những sản phẩm production sẽ có domain name 
+    lúc này ta có tiếp một khái niệm là ingress.
+  
+  + Pods are ephemeral(tạm thời,ko bền vững): 
+     + Nó sẽ được tạo ra, bị xóa, và thay thế bằng một thằng khác bất cứ lúc nào
+     + Khi một woker node die, Pod trên worker node đó cũng sẽ die theo, và một Pod mới sẽ được tạo ra trên woker node khác.
+     + Khi tạo thằng pod mới tạo ra, nó sẽ có một IP khác với thằng cũ.
+     + Nếu ta dùng IP của Pod để tạo connection tới client thì lúc Pod được thay thế với IP khác thì ta phải update lại code
+
+Multiple Pod run same application
+Có nghĩa là ta sẽ có nhiều pod đang chạy một ứng dụng của chúng ta để tăng performance. 
+Ví dụ khi ta dùng ReplicaSet với replicas = 3, nó sẽ tạo ra 3 Pod. Vậy làm sao ta biết được nên gửi request tới Pod nào?
+Thì để giải quyết những vấn để trên thì Kubernetes cung cấp cho chúng ta Services để quản lý connection
+
+Làm sao Service biết được nó sẽ chọn Pod nào để quản lý connection tới những Pod đó?
+Services cũng sẽ sử dụng label selectors để chọn Pod mà nó quản lý connection.
+
+Service sẽ có 4 loại cơ bản là:
+  + ClusterIP
+  + NodePort
+  + ExternalName
+  + LoadBalancer
+
++ ClusterIP
+  + Đây là loại service sẽ tạo một IP và local DNS mà sẽ có thể truy cập ở bên trong cluster, không thể truy cập từ bên ngoài,
+  + Được dùng chủ yếu cho các Pod ở bên trong cluster dễ dàng giao tiếp với nhau.
+
+kubectl get svc
+
++ Redis của sẽ có địa chỉ truy cập như sau redis://10.102.135.144:6379 - hostname: 10.102.135.144 - dùng địa chỉ này để các ứng ta deploy về sau truy cập được tới redis host.
++ Các ứng dụng đã chạy sẵn, để kết nối tới host này truy cập redis host thằng IP, ta có thể truy cập thông qua DNS, kubernes có cung cấp cho chúng ta một local DNS bên trong cluster, 
+ giúp chúng ta có thể connect được tới host ta muốn thông qua DNS. 
+ --> Ta có thể connect redis với địa chỉ sau redis://redis:6379, với host name là tên của Service chúng ta đặt trong trường metadata.
+ 
+kubectl run hello-redis --image=080196/hello-redis
+kubectl delete pod hello-redis
+kubectl delete -f hello-service.yaml
+
+
+ClusterIP giúp các ứng dụng deploy trong cluster của ta giao tiếp với nhau dễ dàng hơn nhiều. 
+Còn nếu chúng ta muốn client từ bên ngoài có thể truy cập vào ứng dụng của chúng ta thì sao?
+Có 3 cách đó là dùng NodePort, LoadBalancer (hỗ trợ clound), Ingress.
+
